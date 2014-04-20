@@ -1,0 +1,11 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+	  xmlns:tools="http://schemas.android.com/tools"
+	  tools:context="com.stylingandroid.bluetoothle.MainActivity">
+
+	<item
+		android:id="@+id/action_refresh"
+		android:orderInCategory="100"
+		android:showAsAction="always"
+		android:icon="@drawable/ic_menu_refresh"
+		android:title="@string/action_refresh"/>
+</menu>
