@@ -32,6 +32,9 @@ public class DeviceListFragment extends Fragment implements AbsListView.OnItemCl
 
 	private String[] mDevices = null;
 
+	private String mScanning;
+	private String mNoDevices;
+
 	public static DeviceListFragment newInstance() {
 		return new DeviceListFragment();
 	}
@@ -48,6 +51,8 @@ public class DeviceListFragment extends Fragment implements AbsListView.OnItemCl
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
 							 Bundle savedInstanceState) {
 		View view = inflater.inflate(R.layout.fragment_device, container, false);
+		mScanning = inflater.getContext().getString(R.string.scanning);
+		mNoDevices = inflater.getContext().getString(R.string.no_devices);
 
 		if (view != null) {
 			// Set the adapter
@@ -117,6 +122,6 @@ public class DeviceListFragment extends Fragment implements AbsListView.OnItemCl
 
 	public void setScanning(boolean scanning) {
 		mListView.setEnabled(!scanning);
-		setEmptyText(getString(scanning ? R.string.scanning : R.string.no_devices));
+		setEmptyText(scanning ? mScanning : mNoDevices);
 	}
 }

@@ -3,7 +3,10 @@ package com.stylingandroid.ble;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,15 +29,20 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 	static final int MSG_START_SCAN = 3;
 	static final int MSG_STATE_CHANGED = 4;
 	static final int MSG_DEVICE_FOUND = 5;
+	static final int MSG_DEVICE_CONNECT = 6;
+	static final int MSG_DEVICE_DISCONNECT = 7;
 
 	private static final long SCAN_PERIOD = 3000;
 
 	public static final String KEY_MAC_ADDRESSES = "KEY_MAC_ADDRESSES";
 
+	private static final String DEVICE_NAME = "SensorTag";
+
 	private final IncomingHandler mHandler;
 	private final Messenger mMessenger;
 	private final List<Messenger> mClients = new LinkedList<Messenger>();
 	private final Map<String, BluetoothDevice> mDevices = new HashMap<String, BluetoothDevice>();
+	private BluetoothGatt mGatt = null;
 
 	public enum State {
 		UNKNOWN,
@@ -48,6 +56,19 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 
 	private BluetoothAdapter mBluetooth = null;
 	private State mState = State.UNKNOWN;
+
+	private BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+		@Override
+		public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+			super.onConnectionStateChange(gatt, status, newState);
+			Log.v(TAG, "Connection State Changed: " + (newState == BluetoothProfile.STATE_CONNECTED ? "Connected" : "Disconnected"));
+			if (newState == BluetoothProfile.STATE_CONNECTED) {
+				setState(State.CONNECTED);
+			} else {
+				setState(State.IDLE);
+			}
+		}
+	};
 
 	public BleService() {
 		mHandler = new IncomingHandler(this);
@@ -77,11 +98,22 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 						break;
 					case MSG_UNREGISTER:
 						service.mClients.remove(msg.replyTo);
+						if (service.mState == State.CONNECTED && service.mGatt != null) {
+							service.mGatt.disconnect();
+						}
 						Log.d(TAG, "Unegistered");
 						break;
 					case MSG_START_SCAN:
 						service.startScan();
 						Log.d(TAG, "Start Scan");
+						break;
+					case MSG_DEVICE_CONNECT:
+						service.connect((String) msg.obj);
+						break;
+					case MSG_DEVICE_DISCONNECT:
+						if (service.mState == State.CONNECTED && service.mGatt != null) {
+							service.mGatt.disconnect();
+						}
 						break;
 					default:
 						super.handleMessage(msg);
@@ -115,7 +147,7 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 
 	@Override
 	public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-		if (device != null && !mDevices.containsValue(device) && device.getName() != null && device.getName().equals("SensorTag")) {
+		if (device != null && !mDevices.containsValue(device) && device.getName() != null && device.getName().equals(DEVICE_NAME)) {
 			mDevices.put(device.getAddress(), device);
 			Message msg = Message.obtain(null, MSG_DEVICE_FOUND);
 			if (msg != null) {
@@ -126,6 +158,13 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 				sendMessage(msg);
 			}
 			Log.d(TAG, "Added " + device.getName() + ": " + device.getAddress());
+		}
+	}
+
+	public void connect(String macAddress) {
+		BluetoothDevice device = mDevices.get(macAddress);
+		if (device != null) {
+			mGatt = device.connectGatt(this, true, mGattCallback);
 		}
 	}
 

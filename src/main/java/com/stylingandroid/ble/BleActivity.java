@@ -31,6 +31,7 @@ public class BleActivity extends Activity implements DeviceListFragment.OnDevice
 	private MenuItem mRefreshItem = null;
 
 	private DeviceListFragment mDeviceList = DeviceListFragment.newInstance();
+	private DisplayFragment mDisplay = DisplayFragment.newInstance();
 
 	private ServiceConnection mConnection = new ServiceConnection() {
 		@Override
@@ -146,7 +147,16 @@ public class BleActivity extends Activity implements DeviceListFragment.OnDevice
 
 	@Override
 	public void onDeviceListFragmentInteraction(String macAddress) {
-
+		Message msg = Message.obtain(null, BleService.MSG_DEVICE_CONNECT);
+		if (msg != null) {
+			msg.obj = macAddress;
+			try {
+				mService.send(msg);
+			} catch (RemoteException e) {
+				Log.w(TAG, "Lost connection to service", e);
+				unbindService(mConnection);
+			}
+		}
 	}
 
 	private static class IncomingHandler extends Handler {
@@ -177,6 +187,7 @@ public class BleActivity extends Activity implements DeviceListFragment.OnDevice
 	}
 
 	private void stateChanged(BleService.State newState) {
+		boolean disconnected = mState == BleService.State.CONNECTED;
 		mState = newState;
 		switch (mState) {
 			case SCANNING:
@@ -188,8 +199,18 @@ public class BleActivity extends Activity implements DeviceListFragment.OnDevice
 				startActivityForResult(enableBtIntent, ENABLE_BT);
 				break;
 			case IDLE:
+				if (disconnected) {
+					FragmentTransaction tx = getFragmentManager().beginTransaction();
+					tx.replace(R.id.main_content, mDeviceList);
+					tx.commit();
+				}
 				mRefreshItem.setEnabled(true);
 				mDeviceList.setScanning(false);
+				break;
+			case CONNECTED:
+				FragmentTransaction tx = getFragmentManager().beginTransaction();
+				tx.replace(R.id.main_content, mDisplay);
+				tx.commit();
 				break;
 		}
 	}
