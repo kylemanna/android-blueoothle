@@ -31,6 +31,8 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 
 	public static final String KEY_MAC_ADDRESSES = "KEY_MAC_ADDRESSES";
 
+	private static final String DEVICE_NAME = "SensorTag";
+
 	private final IncomingHandler mHandler;
 	private final Messenger mMessenger;
 	private final List<Messenger> mClients = new LinkedList<Messenger>();
@@ -115,7 +117,7 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 
 	@Override
 	public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-		if (device != null && !mDevices.containsValue(device) && device.getName() != null && device.getName().equals("SensorTag")) {
+		if (device != null && !mDevices.containsValue(device) && device.getName() != null && device.getName().equals(DEVICE_NAME)) {
 			mDevices.put(device.getAddress(), device);
 			Message msg = Message.obtain(null, MSG_DEVICE_FOUND);
 			if (msg != null) {
