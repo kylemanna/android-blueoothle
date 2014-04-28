@@ -5,6 +5,9 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
@@ -21,6 +24,9 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class BleService extends Service implements BluetoothAdapter.LeScanCallback {
 	public static final String TAG = "BleService";
@@ -31,12 +37,21 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 	static final int MSG_DEVICE_FOUND = 5;
 	static final int MSG_DEVICE_CONNECT = 6;
 	static final int MSG_DEVICE_DISCONNECT = 7;
+	static final int MSG_DEVICE_DATA = 8;
 
 	private static final long SCAN_PERIOD = 3000;
 
 	public static final String KEY_MAC_ADDRESSES = "KEY_MAC_ADDRESSES";
 
 	private static final String DEVICE_NAME = "SensorTag";
+	private static final UUID UUID_HUMIDITY_SERVICE = UUID.fromString("f000aa20-0451-4000-b000-000000000000");
+	private static final UUID UUID_HUMIDITY_DATA = UUID.fromString("f000aa21-0451-4000-b000-000000000000");
+	private static final UUID UUID_HUMIDITY_CONF = UUID.fromString("f000aa22-0451-4000-b000-000000000000");
+	private static final UUID UUID_CCC = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+	private static final byte[] ENABLE_SENSOR = {0x01};
+
+	private static final Queue<Object> sWriteQueue = new ConcurrentLinkedQueue<Object>();
+	private static boolean sIsWriting = false;
 
 	private final IncomingHandler mHandler;
 	private final Messenger mMessenger;
@@ -71,13 +86,45 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 		}
 
 		@Override
-		public void onServicesDiscovered(BluetoothGatt gatt,
-										 int status) {
+		public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+			Log.v(TAG, "onServicesDiscovered: " + status);
 			if (status == BluetoothGatt.GATT_SUCCESS) {
-				Log.v(TAG, "onServicesDiscovered: " + status);
+				subscribe(gatt);
 			}
 		}
 
+		@Override
+		public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+			Log.v(TAG, "onCharacteristicWrite: " + status);
+			sIsWriting = false;
+			nextWrite();
+		}
+
+		@Override
+		public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+			Log.v(TAG, "onDescriptorWrite: " + status);
+			sIsWriting = false;
+			nextWrite();
+		}
+
+		@Override
+		public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+			Log.v(TAG, "onCharacteristicChanged: " + characteristic.getUuid());
+			if (characteristic.getUuid().equals(UUID_HUMIDITY_DATA)) {
+				int t = shortUnsignedAtOffset(characteristic, 0);
+				int h = shortUnsignedAtOffset(characteristic, 2);
+				t = t - (t % 4);
+				h = h - (h % 4);
+
+				float humidity = (-6f) + 125f * (h / 65535f);
+				float temperature = -46.85f + 175.72f / 65536f * (float) t;
+				Log.d(TAG, "Value: " + humidity + ":" + temperature);
+				Message msg = Message.obtain(null, MSG_DEVICE_DATA);
+				msg.arg1 = (int) (temperature * 100);
+				msg.arg2 = (int) (humidity * 100);
+				sendMessage(msg);
+			}
+		}
 	};
 
 	public BleService() {
@@ -178,6 +225,50 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 		}
 	}
 
+	private void subscribe(BluetoothGatt gatt) {
+		BluetoothGattService humidityService = gatt.getService(UUID_HUMIDITY_SERVICE);
+		if (humidityService != null) {
+			BluetoothGattCharacteristic humidityCharacteristic = humidityService.getCharacteristic(UUID_HUMIDITY_DATA);
+			BluetoothGattCharacteristic humidityConf = humidityService.getCharacteristic(UUID_HUMIDITY_CONF);
+			if (humidityCharacteristic != null && humidityConf != null) {
+				BluetoothGattDescriptor config = humidityCharacteristic.getDescriptor(UUID_CCC);
+				if (config != null) {
+					gatt.setCharacteristicNotification(humidityCharacteristic, true);
+					humidityConf.setValue(ENABLE_SENSOR);
+					write(humidityConf);
+					config.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+					write(config);
+				}
+			}
+		}
+	}
+
+	private synchronized void write(Object o) {
+		if (sWriteQueue.isEmpty() && !sIsWriting) {
+			doWrite(o);
+		} else {
+			sWriteQueue.add(o);
+		}
+	}
+
+	private synchronized void nextWrite() {
+		if (!sWriteQueue.isEmpty() && !sIsWriting) {
+			doWrite(sWriteQueue.poll());
+		}
+	}
+
+	private synchronized void doWrite(Object o) {
+		if (o instanceof BluetoothGattCharacteristic) {
+			sIsWriting = true;
+			mGatt.writeCharacteristic((BluetoothGattCharacteristic) o);
+		} else if (o instanceof BluetoothGattDescriptor) {
+			sIsWriting = true;
+			mGatt.writeDescriptor((BluetoothGattDescriptor) o);
+		} else {
+			nextWrite();
+		}
+	}
+
 	private void setState(State newState) {
 		if (mState != newState) {
 			mState = newState;
@@ -214,5 +305,12 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 			success = false;
 		}
 		return success;
+	}
+
+	private static Integer shortUnsignedAtOffset(BluetoothGattCharacteristic characteristic, int offset) {
+		Integer lowerByte = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, offset);
+		Integer upperByte = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, offset + 1);
+
+		return (upperByte << 8) + lowerByte;
 	}
 }

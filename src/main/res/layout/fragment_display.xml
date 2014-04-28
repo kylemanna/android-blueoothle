@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-			  android:orientation="vertical"
-			  android:layout_width="match_parent"
-			  android:layout_height="match_parent">
+<GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
+			android:orientation="horizontal"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:columnCount="2">
 
-</LinearLayout>
+	<TextView android:text="@string/temp_label"/>
+
+	<TextView android:id="@+id/temperature"/>
+
+	<TextView android:text="@string/humidity_label"/>
+
+	<TextView android:id="@+id/humidity"/>
+
+</GridLayout>

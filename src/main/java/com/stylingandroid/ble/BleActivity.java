@@ -180,6 +180,11 @@ public class BleActivity extends Activity implements DeviceListFragment.OnDevice
 							activity.mDeviceList.setDevices(activity, data.getStringArray(BleService.KEY_MAC_ADDRESSES));
 						}
 						break;
+					case BleService.MSG_DEVICE_DATA:
+						float temperature = msg.arg1 / 100f;
+						float humidity = msg.arg2 / 100f;
+						activity.mDisplay.setData(temperature, humidity);
+						break;
 				}
 			}
 			super.handleMessage(msg);

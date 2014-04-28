@@ -4,7 +4,11 @@
 	<string name="app_name">BluetoothLE</string>
 	<string name="hello_world">Hello world!</string>
 	<string name="action_refresh">Refresh</string>
-	<string name="scanning">Looking for devices. Please wait...</string>
+	<string name="scanning">Looking for devices. Please wait…</string>
 	<string name="no_devices">No devices found.</string>
+	<string name="temp_label">Temperature:</string>
+	<string name="temp_format">%1$.1f°</string>
+	<string name="humidity_label">Humidity:</string>
+	<string name="humidity_format">%1$.1f%%</string>
 
 </resources>
