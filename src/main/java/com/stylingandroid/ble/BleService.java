@@ -64,10 +64,20 @@ public class BleService extends Service implements BluetoothAdapter.LeScanCallba
 			Log.v(TAG, "Connection State Changed: " + (newState == BluetoothProfile.STATE_CONNECTED ? "Connected" : "Disconnected"));
 			if (newState == BluetoothProfile.STATE_CONNECTED) {
 				setState(State.CONNECTED);
+				gatt.discoverServices();
 			} else {
 				setState(State.IDLE);
 			}
 		}
+
+		@Override
+		public void onServicesDiscovered(BluetoothGatt gatt,
+										 int status) {
+			if (status == BluetoothGatt.GATT_SUCCESS) {
+				Log.v(TAG, "onServicesDiscovered: " + status);
+			}
+		}
+
 	};
 
 	public BleService() {
