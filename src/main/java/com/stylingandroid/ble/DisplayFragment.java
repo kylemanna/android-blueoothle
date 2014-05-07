@@ -1,6 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2014 blinkbox Entertainment Limited. All rights reserved.
- *******************************************************************************/
 package com.stylingandroid.ble;
 
 import android.app.Fragment;
